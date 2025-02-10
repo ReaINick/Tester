@@ -1,8 +1,8 @@
 const imageResizer = {
     images: {},
     imageUrls: {
-        virus: 'https://github.com/ReaINick/Tester/blob/main/virus.png',
-        recombine: 'https://github.com/ReaINick/Tester/blob/main/recombine.png'
+        virus: 'https://github.com/ReaINick/Tester/blob/main/virus.png?raw=true',
+        recombine: 'https://github.com/ReaINick/Tester/blob/main/recombine.png?raw=true'
     },
 
     loadImage: function (name, url) {
