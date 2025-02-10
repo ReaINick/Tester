@@ -5,14 +5,13 @@ const scoreElement = document.getElementById('score');
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-const MAP_SIZE = 40000; // Map dimensions (40,000 x 40,000)
-const VIEWPORT_PADDING = 100; // Extra padding for rendering outside of viewport
-let zoomLevel = 1;        // Initial zoom level
-const ZOOM_SPEED = 0.001;  // Zoom speed
-const MIN_ZOOM = 0.1;      // Minimum zoom level
-const MAX_ZOOM = 5;        // Maximum zoom level
+const MAP_SIZE = 40000;
+const VIEWPORT_PADDING = 100;
+let zoomLevel = 1;
+const ZOOM_SPEED = 0.001;
+const MIN_ZOOM = 0.1;
+const MAX_ZOOM = 5;
 
-// Player object
 const player = {
     cells: [
         {
@@ -26,15 +25,12 @@ const player = {
     score: 0
 };
 
-// Food array
 const foods = [];
-const foodCount = 5000; // Large number of food particles for a large map
+const foodCount = 5000;
 
-// Viruses array
 const viruses = [];
 const virusCount = 50;
 
-// Function to create food
 function createFood() {
     return {
         position: new Vector2(Math.random() * MAP_SIZE, Math.random() * MAP_SIZE),
@@ -43,7 +39,6 @@ function createFood() {
     };
 }
 
-// Function to create virus
 function createVirus() {
     return {
         position: new Vector2(Math.random() * MAP_SIZE, Math.random() * MAP_SIZE),
@@ -54,7 +49,6 @@ function createVirus() {
     };
 }
 
-// Initialize food and virus arrays
 for (let i = 0; i < foodCount; i++) {
     foods.push(createFood());
 }
@@ -63,7 +57,6 @@ for (let i = 0; i < virusCount; i++) {
     viruses.push(createVirus());
 }
 
-// Function to draw circle
 function drawCircle(x, y, radius, color) {
     ctx.beginPath();
     ctx.arc(x, y, radius, 0, Math.PI * 2);
@@ -72,34 +65,47 @@ function drawCircle(x, y, radius, color) {
     ctx.closePath();
 }
 
-// Function to draw image
 function drawImage(image, x, y, width, height) {
     ctx.drawImage(image, x, y, width, height);
 }
 
-// Function to handle zoom
 function handleZoom(event) {
     zoomLevel += event.deltaY * ZOOM_SPEED;
-    zoomLevel = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoomLevel)); // Clamp zoom level
+    zoomLevel = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoomLevel));
 }
 
-// Function to render the game
+// Function to split cell into smaller cells
+function splitCell(cell) {
+    const splitCount = Math.floor(Math.random() * 5) + 3; // Split into 3-7 pieces
+    const angleStep = (Math.PI * 2) / splitCount;
+    const newCells = [];
+
+    for (let i = 0; i < splitCount; i++) {
+        const angle = i * angleStep;
+        const velocity = new Vector2(Math.cos(angle), Math.sin(angle)).multiplyEq(5);
+        const newRadius = cell.radius / Math.sqrt(splitCount);
+
+        newCells.push({
+            position: cell.position.clone(),
+            velocity: velocity,
+            radius: newRadius,
+            color: cell.color
+        });
+    }
+    return newCells;
+}
+
 function render() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Calculate viewport based on player's position and zoom level
     const playerCell = player.cells[0];
     const viewportX = playerCell.position.x - (canvas.width / 2) / zoomLevel;
     const viewportY = playerCell.position.y - (canvas.height / 2) / zoomLevel;
 
-    // Save the current transformation matrix
     ctx.save();
-
-    // Apply zoom and translate context
     ctx.scale(zoomLevel, zoomLevel);
     ctx.translate(-viewportX, -viewportY);
 
-    // Render background grid
     ctx.fillStyle = '#f8f8f8';
     ctx.fillRect(viewportX, viewportY, MAP_SIZE, MAP_SIZE);
 
@@ -117,7 +123,6 @@ function render() {
         ctx.stroke();
     }
 
-    // Collision and consumption logic
     foods.forEach((food, index) => {
         const distanceVector = playerCell.position.minusNew(food.position);
         const distance = distanceVector.magnitude();
@@ -127,11 +132,36 @@ function render() {
             player.score += 10;
             scoreElement.textContent = player.score;
             foods.splice(index, 1);
-            foods.push(createFood()); // Respawn food
+            foods.push(createFood());
         }
     });
 
-    // Render foods
+    viruses.forEach((virus, index) => {
+        player.cells.forEach((cell) => {
+            const distanceVector = cell.position.minusNew(virus.position);
+            const distance = distanceVector.magnitude();
+
+            if (distance < cell.radius + virus.radius) {
+                if (cell.radius > virus.radius * 1.2) {
+                    // Player cell is larger, split it
+                    const newCells = splitCell(cell);
+                    player.cells = player.cells.concat(newCells); // Add new cells
+                    player.cells.splice(player.cells.indexOf(cell), 1); // Remove original cell
+                    viruses.splice(index, 1);
+                    viruses.push(createVirus());
+                } else {
+                    // Player cell is smaller, consume it
+                    player.score -= 50;
+                    scoreElement.textContent = player.score;
+                    player.cells.splice(player.cells.indexOf(cell), 1);
+                    virus.radius += cell.radius / 2;
+                    viruses.splice(index, 1);
+                    viruses.push(createVirus());
+                }
+            }
+        });
+    });
+
     foods.forEach((food) => {
         const screenX = food.position.x;
         const screenY = food.position.y;
@@ -144,23 +174,19 @@ function render() {
         drawImage(virus.image, screenX - virus.radius, screenY - virus.radius, virus.radius * 2, virus.radius * 2);
     });
 
-    // Render player cells
     player.cells.forEach((cell) => {
         const screenX = cell.position.x;
         const screenY = cell.position.y;
         drawCircle(screenX, screenY, cell.radius, cell.color);
     });
 
-    // Restore the transformation matrix
     ctx.restore();
 
     requestAnimationFrame(render);
 }
 
-// Event listener for zoom
 canvas.addEventListener('wheel', handleZoom);
 
-// Start rendering
 imageResizer.loadImages(['virus', 'recombine']).then(() => {
     render();
 });
