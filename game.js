@@ -2,15 +2,18 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const scoreElement = document.getElementById('score');
 
-canvas.width = window.innerWidth - 20;
-canvas.height = window.innerHeight - 20;
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+const MAP_SIZE = 40000; // Map dimensions (40,000 x 40,000)
+const VIEWPORT_PADDING = 100; // Extra padding for rendering outside of viewport
 
 const player = {
     cells: [
         {
-            position: new Vector2(canvas.width / 2, canvas.height / 2),
+            position: new Vector2(MAP_SIZE / 2, MAP_SIZE / 2),
             velocity: new Vector2(0, 0),
-            radius: 20,
+            radius: 50,
             color: 'blue'
         }
     ],
@@ -19,13 +22,11 @@ const player = {
 };
 
 const foods = [];
-const foodCount = 100;
-const friction = 0.98;
-const acceleration = 0.5;
+const foodCount = 5000; // Large number of food particles for a large map
 
 function createFood() {
     return {
-        position: new Vector2(Math.random() * canvas.width, Math.random() * canvas.height),
+        position: new Vector2(Math.random() * MAP_SIZE, Math.random() * MAP_SIZE),
         radius: 5,
         color: `rgb(${Math.random() * 255},${Math.random() * 255},${Math.random() * 255})`
     };
@@ -43,106 +44,54 @@ function drawCircle(x, y, radius, color) {
     ctx.closePath();
 }
 
-const keys = {};
-
-window.addEventListener('keydown', (e) => {
-    keys[e.code] = true;
-});
-
-window.addEventListener('keyup', (e) => {
-    keys[e.code] = false;
-});
-
-function splitCell(cell) {
-    if (cell.radius < 40) return; // Minimum size to split
-
-    const newRadius = cell.radius / Math.sqrt(2);
-    const newCell = {
-        position: cell.position.clone(),
-        velocity: cell.velocity.clone().multiplyEq(2), // Eject with double speed
-        radius: newRadius,
-        color: cell.color
-    };
-
-    cell.radius = newRadius;
-    player.cells.push(newCell);
-}
-
-function ejectMass(cell) {
-    if (cell.radius < 30) return; // Minimum size to eject mass
-
-    const ejectedMass = {
-        position: cell.position.clone(),
-        velocity: cell.velocity.clone().normalise().multiplyEq(10), // Eject in the direction of movement
-        radius: 10,
-        color: cell.color
-    };
-
-    cell.radius -= 5;
-    foods.push(ejectedMass);
-}
-
-function update() {
+function render() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    let direction = new Vector2(0, 0);
-    if (keys.ArrowUp) direction.y -= 1;
-    if (keys.ArrowDown) direction.y += 1;
-    if (keys.ArrowLeft) direction.x -= 1;
-    if (keys.ArrowRight) direction.x += 1;
+    const playerCell = player.cells[0];
+    const viewportX = playerCell.position.x - canvas.width / 2;
+    const viewportY = playerCell.position.y - canvas.height / 2;
 
-    if (keys.KeyG) {
-        player.cells.forEach(splitCell);
-        keys.KeyG = false; // Prevent continuous splitting
+    // Render background grid
+    ctx.fillStyle = '#f8f8f8';
+    ctx.fillRect(-viewportX, -viewportY, MAP_SIZE, MAP_SIZE);
+
+    ctx.strokeStyle = '#e0e0e0';
+    for (let x = -viewportX % 100; x < canvas.width; x += 100) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
+        ctx.stroke();
+    }
+    for (let y = -viewportY % 100; y < canvas.height; y += 100) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
     }
 
-    if (keys.KeyX) {
-        player.cells.forEach(ejectMass);
-        keys.KeyX = false; // Prevent continuous ejection
-    }
+    // Render foods within viewport
+    foods.forEach((food) => {
+        const screenX = food.position.x - viewportX;
+        const screenY = food.position.y - viewportY;
 
-    player.cells.forEach(cell => {
-        if (direction.magnitude() > 0) {
-            direction.normalise().multiplyEq(acceleration);
-            cell.velocity.plusEq(direction);
+        if (
+            screenX + food.radius > -VIEWPORT_PADDING &&
+            screenX - food.radius < canvas.width + VIEWPORT_PADDING &&
+            screenY + food.radius > -VIEWPORT_PADDING &&
+            screenY - food.radius < canvas.height + VIEWPORT_PADDING
+        ) {
+            drawCircle(screenX, screenY, food.radius, food.color);
         }
-
-        cell.velocity.multiplyEq(friction);
-        cell.position.plusEq(cell.velocity);
-
-        // Boundary collision
-        if (cell.position.x - cell.radius < 0 || cell.position.x + cell.radius > canvas.width) {
-            cell.velocity.x *= -0.8;
-            cell.position.x = Math.max(cell.radius, Math.min(canvas.width - cell.radius, cell.position.x));
-        }
-        if (cell.position.y - cell.radius < 0 || cell.position.y + cell.radius > canvas.height) {
-            cell.velocity.y *= -0.8;
-            cell.position.y = Math.max(cell.radius, Math.min(canvas.height - cell.radius, cell.position.y));
-        }
-
-        drawCircle(cell.position.x, cell.position.y, cell.radius, cell.color);
     });
 
-    foods.forEach((food, index) => {
-        drawCircle(food.position.x, food.position.y, food.radius, food.color);
-
-        player.cells.forEach(cell => {
-            const distanceVector = cell.position.minusNew(food.position);
-            const distance = distanceVector.magnitude();
-
-            if (distance < cell.radius + food.radius) {
-                cell.radius += food.radius / 10;
-                player.score += 10;
-                scoreElement.textContent = player.score;
-                foods.splice(index, 1);
-                foods.push(createFood());
-            }
-        });
+    // Render player cells
+    player.cells.forEach((cell) => {
+        const screenX = cell.position.x - viewportX;
+        const screenY = cell.position.y - viewportY;
+        drawCircle(screenX, screenY, cell.radius, cell.color);
     });
 
-    player.speed = 5 / Math.sqrt(player.cells[0].radius);
-
-    requestAnimationFrame(update);
+    requestAnimationFrame(render);
 }
 
-update();
+render();
