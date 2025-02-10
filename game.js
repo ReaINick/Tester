@@ -143,14 +143,14 @@ function render() {
 
             if (distance < cell.radius + virus.radius) {
                 if (cell.radius > virus.radius * 1.2) {
-                    // Player cell is larger, split it
+                    // Player cell is larger, split it.
                     const newCells = splitCell(cell);
                     player.cells = player.cells.concat(newCells); // Add new cells
                     player.cells.splice(player.cells.indexOf(cell), 1); // Remove original cell
                     viruses.splice(index, 1);
                     viruses.push(createVirus());
                 } else {
-                    // Player cell is smaller, consume it
+                    // Player cell is smaller, consume it.
                     player.score -= 50;
                     scoreElement.textContent = player.score;
                     player.cells.splice(player.cells.indexOf(cell), 1);
